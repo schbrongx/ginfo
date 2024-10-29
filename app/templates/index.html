@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoInfo Portal</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body>
+    <h1>GeoInfo Portal</h1>
+    
+    <!-- Form to add a new location -->
+    <form id="locationForm">
+        <label for="name">Location Name:</label>
+        <input type="text" id="name" name="name" required>
+        <label for="latitude">Latitude:</label>
+        <input type="number" id="latitude" name="latitude" step="0.0001" required>
+        <label for="longitude">Longitude:</label>
+        <input type="number" id="longitude" name="longitude" step="0.0001" required>
+        <button type="submit">Add Location</button>
+    </form>
+
+    <div id="map" style="height: 500px; margin-top: 20px;"></div>
+
+    <script>
+    </script>
+    
+    <script>
+        // Initialize map
+        var map = L.map('map').setView([47.3896, 9.2892], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // Function to fetch and display locations
+        function loadLocations() {
+            fetch('/locations')
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Fetched data: ", data); // Debugging output
+                    data.forEach(location => {
+                        const [lon, lat] = location[1].replace("POINT(", "").replace(")", "").split(" ");
+                        L.marker([parseFloat(lat), parseFloat(lon)]).addTo(map)
+                            .bindPopup(location[0]);
+                    });
+                })
+                .catch(error => console.error("Error fetching locations: ", error));
+        }
+
+        map.on('click', function(e) {
+            const latitude = e.latlng.lat.toFixed(4);
+            const longitude = e.latlng.lng.toFixed(4);
+            document.getElementById('latitude').value = latitude;
+            document.getElementById('longitude').value = longitude;
+        });
+
+        // Load locations on page load
+        loadLocations();
+
+        // Handle form submission to add a new location
+        document.getElementById('locationForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('name').value;
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            const geom = `POINT(${longitude} ${latitude})`;
+
+            fetch('/locations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, geom: geom })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                loadLocations(); // Refresh the map markers
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    </script>
+</body>
+</html>
+
