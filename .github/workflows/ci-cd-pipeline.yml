@@ -15,11 +15,11 @@ jobs:
     steps:
       # Check out the repository code
       - name: Checkout repository
-        uses: actions/checkout
+        uses: actions/checkout@v4
 
       # Set up Python environment
       - name: Set up Python
-        uses: actions/setup-python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
