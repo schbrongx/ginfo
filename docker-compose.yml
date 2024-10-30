@@ -1,16 +1,65 @@
 version: '3'
+
 services:
-  db:
+  db_master:
     image: postgis/postgis
+    restart: always
+    user: postgres
+    healthcheck:
+      test: 'pg_isready -U postgres --dbname postgres'
+      interval: 10s
+      timeout: 5s
+      retries: 5
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256\nhost replication all 0.0.0.0/0 md5"
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_master_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: |
+      postgres 
+      -c wal_level=replica 
+      -c hot_standby=on 
+      -c max_wal_senders=10 
+      -c max_replication_slots=10 
+      -c hot_standby_feedback=on
+
+  db_replica:
+    image: postgis/postgis
+    restart: always
+    user: postgres
+    healthcheck:
+      test: 'pg_isready -U postgres --dbname postgres'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      PGUSER: ${REPLICA_USER}
+      PGPASSWORD: ${REPLICA_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    depends_on:
+      - db_master
+    command: |
+      bash -c "
+      rm -rf /var/lib/postgresql/data/*
+      until pg_basebackup --pgdata=/var/lib/postgresql/data -R --slot=replication_slot --host=db_master --port=5432
+      do
+      echo 'Waiting for primary to connect...'
+      sleep 1s
+      done
+      echo 'Backup done, starting replica...'
+      chown -R postgres:postgres /var/lib/postgresql/data
+      chmod 0700 /var/lib/postgresql/data
+      postgres
+      "
 
   web:
     build:
@@ -19,7 +68,9 @@ services:
     ports:
       - "5000:5000"
     depends_on:
-      - db
+      - db_master
+      - db_replica
 
 volumes:
-  postgres_data:
+  postgres_master_data:
+  postgres_replica_data:
